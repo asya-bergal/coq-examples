@@ -1,0 +1,68 @@
+Formal Verification:
+- Like math proofs, but done with computers, so they confirm that your logic is correct
+
+Motivation for Formal Verification
+- #1: Rigor. We don't trust ourselves to prove things rigorously, especially not systems.
+- #2: Automation, we can prove things faster
+
+Some Type Theory
+
+Curry-Howard isomorphism/correspondence: relatoinship between logic and type theory
+Propositions are types, proofs are inhabitants of those types
+
+TRUE => unit type, type with exactly one inhabitant
+FALSE => type that's uninhabited, bot, also forall a. a
+Logical AND => Product type, pair type
+Logical OR => Sum type
+NOT => x -> bot, x implies false
+
+Forall => Dependent product type, Dependent type, "indexed family of sets" type indexed by another type
+
+e.g. forall (x : nat), x = x is a "dependent function" from nat -> a type which is "proof that this nat is equal to itself". Depeendent function is one where return type varies with its argument
+
+exists: dependent sum type, sigma-type, basically indexed pair where type of second term is dpendent on first, so, exists x, P(x), type "P(x)" is dependent on x
+
+Implication is a function "given a proof of x, I will give you a proof of y"
+
+This is actually a trifecta that also includes category theory, there's a one-to-one correspondence of all this shit.
+
+Type theory isn't the only way to represent logic, but it's turned out to be the way people go with, probably because people already know a lot about it, we know how to write a type checker, there's a lot of PL foundation about type theory.
+
+How does Coq work?
+
+lots of theory which is like "the calculus of inductive constructions" or some bullshit
+
+Functional programming language, Gallina, so you can write code. State propositions as types, to prove, you need to construct a term of that type.
+Coq operates as small trusted kernel which is just a type checker that type checks that your term is of the given type.
+Everything else is untrested code written in "Ltac" tactic language + "tactics" that you use to manipulate and construct terms of that type
+
+Coq vs other Proof Assistants
+- NOT a model checker. You can do induction, don't just iterate over finite number of examples
+- Small trusted kernel which is just a type checker, huge tactic library + tactic language + other automation you can build on top of it. Whole scripting language for writing proofs, "Ltac", which you can extend as you want without threatening soundness, so automation is super easy
+- Prop impredicative, meaning you can quantify over it. (forall P: Prop, .... ) : Prop. Formal systems can have higher or lower levels of consistency, this makes Coq "equiconsistent" with ZFC, which I guess is something people care about.
+- "Intuinitionistic logic", means no law of excluded middle P or ~P. Turns out this is just as consistent as classical logic, but vaguely this is good because it means your logic is constructive, e.g.:
+
+Gamma |- P v ~P
+-----------------
+Gamma |- P \/ Gamma |- ~P
+
+Or Gamma |- exists x, P(x)
+--------------------------
+Get out the x
+
+You can challenge it by showing there is no x
+
+What you end up doing in Coq?
+
+Basically write a bunch of code in Gallina to represent your system, this is super duper important part because it affects how easy your proof will be.
+
+Write some theorems and shit for what you want to say about it
+Use Ltac and tons of automation to prove them
+Hope that the masturbatory cloister of academia maybe already has something that you need.
+
+Don't actually think about theoretical shit basically ever.
+
+If you really want to understand, look at my natural numbers example!
+
+My research
+
