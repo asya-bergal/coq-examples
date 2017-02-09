@@ -92,6 +92,15 @@ Section CoC.
     | _ => 0
     end.
 
+  Fixpoint fresh (n : nat) (t : term) :=
+    match t with
+      | cVar n' => if (n ==n n') then True else False
+      | cApp func arg => fresh n func /\ fresh n arg
+      | cFun x A B => fresh n x /\ fresh n A /\ fresh n B
+      | cForall x A B => fresh n x /\ fresh n A /\ fresh n B
+      | _ => True
+    end.
+
   Definition beta_eq (t1 t2 : term) : Prop :=
     let n := max (fresh_var t1) (fresh_var t2) in
     alpha_normalize (beta_reduce t1) n = alpha_normalize (beta_reduce t2) n.
@@ -110,12 +119,15 @@ Section CoC.
 
   Infix "'in" := hasTypeInSet (at level 66).
   Infix "'::" := hasTypeAddSet (right associativity, at level 65).
+  Notation "[ x '; y '; .. '; z ]" := (hasTypeAddSet x (hasTypeAddSet y .. (hasTypeAddSet z nil) ..)).
 
-  (* Notation "[ x '; y '; .. '; z ]" := (hasTypeAddSet x (hasTypeAddSet y .. (hasTypeAddSet z nil) ..)). *)
+  (* Solution 1 *)
+  (* TODO: x is fresh in A and in gamma and in K in rule 2 *)
+  (* TODO: You can't apply rule 3 if x appears elsewhere in the context gamma *)
 
-  Compute ({ fun cProp ': cProp , cProp } ': { forall cProp ': cProp , cProp }).
-  (* TODO: Guarantee that x is fresh in A in 2, in 4 variables of N should be disjoint with variables of B, freshness constraints all over the damn place*)
-  (* TODO: What was done to weakening must be done to all the others (updating to Set). Also some better Set notation would probably be dope. *)
+  (* Solution 2 *)
+  (* No free variables in the types of things in your context gamma (no dependencies in gamma) *)
+
   Inductive judgement : set hasType -> hasType -> Prop :=
   | introduction : forall (gamma : set hasType),
       gamma '|- cProp ': cType
@@ -136,20 +148,16 @@ Section CoC.
       cVar n ': A ':: gamma '|- t ': B ->
       cVar n ': A ':: gamma '|- B ': cType ->
       gamma '|- { fun (cVar n) ': A , t } ': { forall (cVar n) ': A , B }
-  | lambda_forall_pp : forall (gamma : set hasType) (A B t: term) (n : nat),
-      cVar n ': A ':: gamma '|- t ': B ->
+  | lambda_forall_pp : forall (gamma : set hasType) (A B: term) (n : nat),
       cVar n ': A ':: gamma '|- B ': cProp ->
       gamma '|- { forall (cVar n) ': A , B } ': cProp
-  | lambda_forall_pt : forall (gamma : set hasType) (A B t: term) (n : nat),
-      cVar n ': A ':: gamma '|- t ': B ->
+  | lambda_forall_pt : forall (gamma : set hasType) (A B: term) (n : nat),
       cVar n ': A ':: gamma '|- B ': cProp ->
       gamma '|- { forall (cVar n) ': A , B } ': cType
-  | lambda_forall_tp : forall (gamma : set hasType) (A B t: term) (n : nat),
-      cVar n ': A ':: gamma '|- t ': B ->
+  | lambda_forall_tp : forall (gamma : set hasType) (A B: term) (n : nat),
       cVar n ': A ':: gamma '|- B ': cType ->
       gamma '|- { forall (cVar n) ': A , B } ': cProp
-  | lambda_forall_tt : forall (gamma : set hasType) (A B t: term) (n : nat),
-      cVar n ': A ':: gamma '|- t ': B ->
+  | lambda_forall_tt : forall (gamma : set hasType) (A B: term) (n : nat),
       cVar n ': A ':: gamma '|- B ': cType ->
       gamma '|- { forall (cVar n) ': A , B } ': cType
   | eval : forall (gamma : set hasType) (M N A B MN: term) (n : nat),
@@ -189,12 +197,8 @@ Section Examples.
     }
   Qed.
 
-  (* Lemma listIn_impl_setIn : forall A (s : set A) (x : A), In x s -> set_In x s. *)
-  (*   intuition. *)
-  (* Qed. *)
-
   Theorem well_typed_snd_tt : forall (n1 : nat) (n2 : nat) (A B: term) (_ : n1 <> n2),
-      A ': cType ':: B ': cType ':: nil '|- 
+      [A ': cType '; B ': cType] '|- 
                                 { fun (cVar n1) ': A , { fun (cVar n2) ': B , (cVar n2) } } ': 
                                 { forall (cVar n1) ': A , { forall (cVar n2) ': B , B } }.
     intros.
@@ -205,40 +209,31 @@ Section Examples.
         apply weakening; cbv [hasTypeInSet hasTypeAddSet]; in_set.
       }
       {
-        apply weakening.
-        in_set.
-      }
-      {
-        
-
-        simpl.
-        simpl.
-
-        destruct (hasType_eq_dec (A ': cType) (B ': cType)).
-        destruct (hasType_eq_dec (cVar n1 ': A) (B ': cType)).
-        destruct (hasType_eq_dec (cVar n2 ': B) (B ': cType)).
-
+        apply weakening; in_set.
       }
     }
+    apply lambda_forall_tt; apply weakening; cbv [hasTypeInSet hasTypeAddSet]; in_set.
+  Qed.
+
+  Theorem well_typed_fst_tt : forall (n1 : nat) (n2 : nat) (A B: term) (_ : n1 <> n2),
+      [A ': cType '; B ': cType] '|- 
+                                { fun (cVar n1) ': A , { fun (cVar n2) ': B , (cVar n1) } } ': 
+                                { forall (cVar n1) ': A , { forall (cVar n2) ': B , A } }.
+    intros.
+    apply lambda_fun_t.
     {
-      Print lambda_forall_tt.
-      apply lambda_forall_tt.
+      apply lambda_fun_t.
+      {
+        apply weakening; cbv [hasTypeInSet hasTypeAddSet]; in_set.
+      }
+      {
+        apply weakening; in_set.
+      }
+    }
+    apply lambda_forall_tt; apply weakening; cbv [hasTypeInSet hasTypeAddSet]; in_set.
+  Qed.
 
-
-
-(* Your test cases, once your formalize, should be: well-typing the identity function, well-typing the 2-argument function that returns its second argument, and well-typing the 2-argument function that returns its first argument *)
-
-
-
-
-
-
-
-
-      apply
-
-
-
+  (* Proof : Impossible to produce a judgement with a double-bound variable on the right-hand side. *)
 End Examples.
 
 End CoC.
