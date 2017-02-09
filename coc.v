@@ -40,10 +40,7 @@ Section CoC.
 
   Scheme Equality for hasType.
 
-  Notation "A |: B" := (HasType A B) (at level 45).
-  Notation "'lam' x |: A , t" := (cFun x A t) (at level 200, x at level 44).
-  Notation "'all' x |: A , t" := (cForall x A t) (at level 200, x at level 44).
-
+  (* Compute { fun cProp ': cProp, cProp }. *)
   (* Substitute term N for the variable parametrixed by n in term B. Assume everything is properly alpha renamed in this function. *)
   (* B(x := N) *)
   Fixpoint substitute (B : term) (n : nat) (N : term) : term :=
@@ -99,98 +96,128 @@ Section CoC.
     let n := max (fresh_var t1) (fresh_var t2) in
     alpha_normalize (beta_reduce t1) n = alpha_normalize (beta_reduce t2) n.
 
-  Infix "=b" := beta_eq (no associativity, at level 50).
+  Definition hasTypeInSet (h : hasType) (gamma : set hasType) : Prop :=
+    set_In h gamma.
+  
+  Definition hasTypeAddSet (h : hasType) (gamma : set hasType) : set hasType :=
+    set_add hasType_eq_dec h gamma.
 
-  Reserved Notation "A |= B" (at level 95).
+  Infix "=b" := beta_eq (no associativity, at level 50).
+  Notation "A ': B" := (HasType A B) (at level 60).
+  Notation "{ 'fun' x ': A , t }" := (cFun x A t) (at level 50, x at level 44).
+  Notation "{ 'forall' x ': A , t }" := (cForall x A t) (at level 50, x at level 44).
+  Reserved Notation "A '|- B" (at level 95).
+
+  Infix "'in" := hasTypeInSet (at level 66).
+  Infix "'::" := hasTypeAddSet (right associativity, at level 65).
+
+  (* Notation "[ x '; y '; .. '; z ]" := (hasTypeAddSet x (hasTypeAddSet y .. (hasTypeAddSet z nil) ..)). *)
+
+  Compute ({ fun cProp ': cProp , cProp } ': { forall cProp ': cProp , cProp }).
   (* TODO: Guarantee that x is fresh in A in 2, in 4 variables of N should be disjoint with variables of B, freshness constraints all over the damn place*)
   (* TODO: What was done to weakening must be done to all the others (updating to Set). Also some better Set notation would probably be dope. *)
   Inductive judgement : set hasType -> hasType -> Prop :=
   | introduction : forall (gamma : set hasType),
-      (gamma |= cProp |: cType)
+      gamma '|- cProp ': cType
   | weakening : forall (gamma : set hasType) (h : hasType),
-      (if (set_mem hasType_eq_dec h gamma) then True else False) ->
-      gamma |= h
+      h 'in gamma ->
+      gamma '|- h
   | extra_p : forall (gamma : set hasType) (A x: term),
-      gamma |= A |: cProp ->
-      x |: A :: gamma |= x |: A
+      gamma '|- A ': cProp ->
+      x ': A ':: gamma '|- x ': A
   | extra_t : forall (gamma : set hasType) (A x: term),
-      (gamma |= A |: cType ->
-      x |: A :: gamma |= x |: A)
+      gamma '|- A ': cType ->
+      x ': A ':: gamma '|- x ': A
   | lambda_fun_p : forall (gamma : set hasType) (A B t: term) (n : nat),
-      (cVar n |: A :: gamma |= t |: B ->
-      cVar n |: A :: gamma |= B |: cProp ->
-      gamma |= cFun (cVar n) A t |: cForall (cVar n) A B)
+      cVar n ': A ':: gamma '|- t ': B ->
+      cVar n ': A ':: gamma '|- B ': cProp ->
+      gamma '|- { fun (cVar n) ': A , t } ': { forall (cVar n) ': A , B }
   | lambda_fun_t : forall (gamma : set hasType) (A B t: term) (n : nat),
-      (cVar n |: A :: gamma |= t |: B ->
-      cVar n |: A :: gamma |= B |: cType ->
-      gamma |= cFun (cVar n) A t |: cForall (cVar n) A B)
+      cVar n ': A ':: gamma '|- t ': B ->
+      cVar n ': A ':: gamma '|- B ': cType ->
+      gamma '|- { fun (cVar n) ': A , t } ': { forall (cVar n) ': A , B }
   | lambda_forall_pp : forall (gamma : set hasType) (A B t: term) (n : nat),
-      (cVar n |: A :: gamma |= t |: B ->
-      cVar n |: A :: gamma |= B |: cProp ->
-      gamma |= cForall (cVar n) A B |: cProp)
+      cVar n ': A ':: gamma '|- t ': B ->
+      cVar n ': A ':: gamma '|- B ': cProp ->
+      gamma '|- { forall (cVar n) ': A , B } ': cProp
   | lambda_forall_pt : forall (gamma : set hasType) (A B t: term) (n : nat),
-      (cVar n |: A :: gamma |= t |: B ->
-      cVar n |: A :: gamma |= B |: cProp ->
-      gamma |= cForall (cVar n) A B |: cType)
+      cVar n ': A ':: gamma '|- t ': B ->
+      cVar n ': A ':: gamma '|- B ': cProp ->
+      gamma '|- { forall (cVar n) ': A , B } ': cType
   | lambda_forall_tp : forall (gamma : set hasType) (A B t: term) (n : nat),
-      (cVar n |: A :: gamma |= t |: B ->
-      cVar n |: A :: gamma |= B |: cType ->
-      gamma |= cForall (cVar n) A B |: cProp)
+      cVar n ': A ':: gamma '|- t ': B ->
+      cVar n ': A ':: gamma '|- B ': cType ->
+      gamma '|- { forall (cVar n) ': A , B } ': cProp
   | lambda_forall_tt : forall (gamma : set hasType) (A B t: term) (n : nat),
-      (cVar n |: A :: gamma |= t |: B ->
-      cVar n |: A :: gamma |= B |: cType ->
-      gamma |= cForall (cVar n) A B |: cType)
+      cVar n ': A ':: gamma '|- t ': B ->
+      cVar n ': A ':: gamma '|- B ': cType ->
+      gamma '|- { forall (cVar n) ': A , B } ': cType
   | eval : forall (gamma : set hasType) (M N A B MN: term) (n : nat),
-      (gamma |= M |: cForall (cVar n) A B ->
-      gamma |= N |: A ->
-      gamma |= MN |: substitute B n N)
+      gamma '|- M ': { forall (cVar n) ': A , B } ->
+      gamma '|- N ': A ->
+      gamma '|- MN ': substitute B n N
   | equiv_p : forall (gamma : set hasType) (M A B: term),
-      (gamma |= M |: A ->
+      gamma '|- M ': A ->
       A =b B ->
-      [] |= B |: cProp ->
-      gamma |= M |: B)
+      [] '|- B ': cProp ->
+      gamma '|- M ': B
   | equiv_t : forall (gamma : set hasType) (M A B: term),
-      gamma |= M |: A ->
+      gamma '|- M ': A ->
       A =b B ->
-      [] |= B |: cType ->
-      gamma |= M |: B
-  where "A |= B" := (judgement A B).
+      [] '|- B ': cType ->
+      gamma '|- M ': B
+  where "A '|- B" := (judgement A B).
 
-Notation "A |= B" := (judgement A B) (at level 95).
+Notation "A '|- B" := (judgement A B) (at level 95).
 
 Section Examples.
-  Theorem well_typed_prop : forall (gamma : list hasType), gamma |= cProp |: cType.
+  Theorem well_typed_prop : forall (gamma : list hasType), gamma '|- cProp ': cType.
     constructor.
   Qed.
 
-  Ltac justdoit := apply weakening; intuition.
+  Ltac in_set := repeat (apply set_add_intro; try (left ; reflexivity); right).
 
   Theorem well_typed_id_t : forall (n : nat) (A : term),
-      [A |: cType] |= (lam (cVar n) |: A , (cVar n)) |: (all (cVar n) |: A , A).
+      [A ': cType] '|- { fun (cVar n) ': A , (cVar n) } ': { forall (cVar n) ': A , A }.
     intros.
     apply lambda_fun_t.
     {
-      apply extra_t.
-      justdoit.
+      apply extra_t; apply weakening; cbv [hasTypeInSet set_In]; intuition.
     }
     {
-      justdoit.
+      apply weakening; cbv [hasTypeInSet hasTypeAddSet]; in_set; cbv [set_In]; intuition.
     }
   Qed.
 
+  (* Lemma listIn_impl_setIn : forall A (s : set A) (x : A), In x s -> set_In x s. *)
+  (*   intuition. *)
+  (* Qed. *)
+
   Theorem well_typed_snd_tt : forall (n1 : nat) (n2 : nat) (A B: term) (_ : n1 <> n2),
-      [A |: cType ; B |: cType] |=
-                                (lam (cVar n1) |: A , (lam (cVar n2) |: B , (cVar n2))) |:
-                                (all (cVar n1) |: A , (all (cVar n2) |: B , B)).
+      A ': cType ':: B ': cType ':: nil '|- 
+                                { fun (cVar n1) ': A , { fun (cVar n2) ': B , (cVar n2) } } ': 
+                                { forall (cVar n1) ': A , { forall (cVar n2) ': B , B } }.
     intros.
     apply lambda_fun_t.
     {
       apply lambda_fun_t.
       {
-        justdoit.
+        apply weakening; cbv [hasTypeInSet hasTypeAddSet]; in_set.
       }
       {
-        justdoit.
+        apply weakening.
+        in_set.
+      }
+      {
+        
+
+        simpl.
+        simpl.
+
+        destruct (hasType_eq_dec (A ': cType) (B ': cType)).
+        destruct (hasType_eq_dec (cVar n1 ': A) (B ': cType)).
+        destruct (hasType_eq_dec (cVar n2 ': B) (B ': cType)).
+
       }
     }
     {
