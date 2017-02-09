@@ -5,128 +5,148 @@ Require Import Arith.
 
 Infix "==n" := eq_nat_dec (no associativity, at level 50).
 
-(* False is forall T, T. (produces thing of type T for any T), exfalso implemented this way *)
-(* coq examples: dependent types lists vs list parametrized by length, writing append function, head vs head with proof *)
+(* Simple finite map of nat to nat for reasoning amount alpha renaming of variables. *)
+Definition natmap: Type := list (nat * nat).
 
-(* Definition head_with_proof T (l : list T) (H : l <> []) : T. *)
-(*   destruct l as [_ | hd tl]. *)
-(*   destruct (H eq_refl). *)
-(*   exact t. *)
-(* Defined. *)
+Print option.
 
-Inductive var : nat -> Set :=
-| Var : forall n, var n.
+Fixpoint find (k: nat) (m: natmap) :=
+match m with
+| nil => None
+| kv :: m' => if fst kv ==n k 
+                then Some (snd kv)
+                else find k m'
+end.
 
-Inductive termType : Type :=
-| ctype
-| cprop
-| cvar (_ : nat)
-| capp
-| cfun
-| cforall.
+(* Notation "x |-> y" := (pair x y) (at level 60, no associativity). *)
+(* Notation "[ ]" := nil. *)
+(* Notation "[ p , .. , r ]" := (cons p .. (cons r nil) .. ). *)
 
-(* maximally use dependent types, because this is coq and why the fuck not *)
-Inductive term : termType -> Type :=
-| cType : term ctype
-| cProp : term cprop
-| cVar {n} (_ :var n) : term (cvar n)
-| cApp {c} (_:term cfun) (_:term c) : term capp
-| cFun {c1 c2 n} (_:term (cvar n)) (_:term c1) (_:term c2) : term cfun
-| cForall {c1 c2 n} (_:term (cvar n)) (_:term c1) (_:term c2) : term cforall.
+(* minimally use dependent types, because this is coq *)
+Inductive term : Type :=
+| cType : term
+| cProp : term
+| cVar (_:nat) : term
+| cApp (_:term) (_:term) : term
+| cFun (_:term) (_:term) (_:term) : term
+| cForall (_:term) (_:term) (_:term) : term.
 
-Context (hasType : forall {t T : termType}, term t -> term T -> Prop).
+(* Definition hasType := prod term term. *)
+
+Inductive hasType :=
+  | HasType (t1 t2 : term).
 
 Delimit Scope coc_scope with coc.
 
-Notation "A : B" := (hasType _ _ A B) (at level 50) : coc_scope.
+Notation "A : B" := (HasType A B) (at level 50) : coc_scope.
 
-Context (judgement : list Prop -> list Prop -> Prop).
-Notation "A |- B" := (judgement A B) (at level 95) : coc_scope.
-
+(* Substitute term N for the variable parametrixed by n in term B. Assume everything is properly alpha renamed in this function. *)
 (* B(x := N) *)
-Fixpoint substitute {tB tN} (B : term tB) {n} (x : term (cvar n)) (N : term tN):
-  term match B with
-       | @cVar n' _ => if n' ==n n then tN else tB
-       | _ => tB
-       end.
-  destruct B; try constructor.
-  destruct (n0 ==n n).
-  exact N.
-  exact (cVar v).
-  refine (cApp _ _).
-  assert (
-      match B1 with
-      | cType => cfun
-      | cProp => cfun
-      | @cVar n' _ => if n' ==n n then tN else cfun
-      | cApp _ _ => cfun
-      | cFun _ _ _ => cfun
-      | cForall _ _ _ => cfun
-      end = cfun).
-  destruct B1.
-
-  refine (substitute cfun tN B1 n x N).
-
-  exact (cApp (substitute c1 tN B1 n x N) (substitute c2 tN B2 n x N)).
-  (* TODO: ask peter about this *)
-  exact (cFun B1 (substitute c1 tN B2 n x N) (substitute c2 tN B3 n x N)).
-  exact (cForall B1 (substitute c1 tN B2 n x N) (substitute c2 tN B3 n x N)).
-
-  match B as t' in (term t) return (term match t' with
-                                         | @cVar n' _ => if n' ==n n then tN else t
-                                         | _ => t
-                                         end) with
-  | cType => cType
-  | cProp => cProp
-  | @cVar n' v => let s := n' ==n n in if s as s0 return (term (if s0 then tN else cvar n')) then N else cVar v
-  | cApp B1 B2 => cApp (substitute B1 x N) (substitute B2 x N)
-  | cFun B1 B2 B3 => cFun B1 (substitute B2 x N) (substitute B3 x N)
-  | cForall B1 B2 B3 => cForall B1 (substitute B2 x N) (substitute B3 x N)
+Fixpoint substitute (B : term) (n : nat) (N : term) : term :=
+  match B with
+  | cVar n' => if (n' ==n n) then N else B
+  | cApp func arg => cApp (substitute func n N) (substitute arg n N)
+  | cFun x A t => cFun x (substitute A n N) (substitute t n N)
+  | cForall x A t => cForall x (substitute A n N) (substitute t n N)
+  | _ => B
   end.
 
-(* Fixpoint beta_reduce {T} (t: term T) : *)
-(*   term match t with *)
-(*        | cApp func args =>  *)
-(*          match func with *)
-(*          |  *)
-(*          | _ => T *)
+Fixpoint beta_reduce (t : term) : term :=
+  match t with
+  | cApp (cFun (cVar n) A t) N => substitute t n N
+  | cFun x A B => cFun x (beta_reduce A) (beta_reduce B)
+  | cForall x A B => cForall x (beta_reduce A) (beta_reduce B)
+  | _ => t
+  end.
 
-(*        | _ => T *)
-(*        end. *)
-  
+Fixpoint alpha_normalize' (t : term) (n : nat) (m : natmap) : term * nat * natmap :=
+  match t with
+  | cVar n' => match (find n' m) with
+              | Some v => (cVar v, n, m)
+              | None => (cVar n, S n, (n', n) :: m)
+              end
+  | cApp func arg => let '(func', n', m') := alpha_normalize' func n m in
+                    let '(arg', n'', m'') := (alpha_normalize' arg n' m') in
+                    (cApp func' arg', n'', m'')
+  | cFun x A B => let '(x', n', m') := alpha_normalize' x n m in
+                 let '(A', n'', m'') := alpha_normalize' A n' m' in
+                 let '(B', n''', m''') := alpha_normalize' B n'' m'' in
+                 (cFun x' A' B', n''', m''')
+  | cForall x A B => let '(x', n', m') := alpha_normalize' x n m in
+                    let '(A', n'', m'') := alpha_normalize' A n' m' in
+                    let '(B', n''', m''') := alpha_normalize' B n'' m'' in
+                    (cForall x' A' B', n''', m''')
+  | _ => (t, n, m)
+  end.
 
+(* Alpha normalize takes in the first fresh index it should start renaming variables to *)
+Definition alpha_normalize (t : term) (n : nat) : term := fst (fst (alpha_normalize' t n [])).
 
-  (* application lambda thing of type A *)
+Fixpoint fresh_var (t : term) : nat :=
+  match t with
+    | cVar n => S n
+    | cApp func arg => max (fresh_var func) (fresh_var arg)
+    | cFun x A B => max (max (fresh_var x) (fresh_var A)) (fresh_var B)
+    | cForall x A B => max (max (fresh_var x) (fresh_var A)) (fresh_var B)
+    | _ => 0
+  end.
 
+Definition beta_eq (t1 t2 : term) : Prop :=
+  let n := max (fresh_var t1) (fresh_var t2) in
+  alpha_normalize (beta_reduce t1) n = alpha_normalize (beta_reduce t2) n.
+
+Infix "=b" := beta_eq (no associativity, at level 50) : coc_scope.
+
+Reserved Notation "A |- B" (at level 95).
   (* TODO: Guarantee that x is fresh in A in 2, in 4 variables of N should be disjoint with variables of B, freshness constraints all over the damn place*)
-Axiom (introduction : forall (gamma : list Prop) (P : term cprop) (T : term ctype), 
-          (gamma |- [P : T])%coc).
+Inductive judgement : list hasType -> hasType -> Prop :=
+| introduction : forall (gamma : list hasType),
+    (gamma |- cProp : cType)%coc
+| extra_p : forall (gamma : list hasType) (A x: term),
+    (gamma |- A : cProp ->
+    x : A :: gamma |- x : A)%coc
+| extra_t : forall (gamma : list hasType) (A x: term),
+    (gamma |- A : cType ->
+    x : A :: gamma |- x : A)%coc
+| lambda_fun_p : forall (gamma : list hasType) (A B t K: term) (n : nat),
+    (cVar n : A :: gamma |- t : B ->
+    cVar n : A :: gamma |- B : cProp ->
+    gamma |- cFun (cVar n) A t : cForall (cVar n) A B)%coc
+| lambda_fun_t : forall (gamma : list hasType) (A B t K: term) (n : nat),
+    (cVar n : A :: gamma |- t : B ->
+    cVar n : A :: gamma |- B : cType ->
+    gamma |- cFun (cVar n) A t : cForall (cVar n) A B)%coc
+| lambda_forall_pp : forall (gamma : list hasType) (A B t K: term) (n : nat),
+    (cVar n : A :: gamma |- t : B ->
+    cVar n : A :: gamma |- B : cProp ->
+    gamma |- cForall (cVar n) A B : cProp)%coc
+| lambda_forall_pt : forall (gamma : list hasType) (A B t K: term) (n : nat),
+    (cVar n : A :: gamma |- t : B ->
+    cVar n : A :: gamma |- B : cProp ->
+    gamma |- cForall (cVar n) A B : cType)%coc
+| lambda_forall_tp : forall (gamma : list hasType) (A B t K: term) (n : nat),
+    (cVar n : A :: gamma |- t : B ->
+    cVar n : A :: gamma |- B : cType ->
+    gamma |- cForall (cVar n) A B : cProp)%coc
+| lambda_forall_tt : forall (gamma : list hasType) (A B t K: term) (n : nat),
+    (cVar n : A :: gamma |- t : B ->
+    cVar n : A :: gamma |- B : cType ->
+    gamma |- cForall (cVar n) A B : cType)%coc
+| eval : forall (gamma : list hasType) (M N A B MN: term) (n : nat),
+    (gamma |- M : cForall (cVar n) A B ->
+    gamma |- N : A ->
+    gamma |- MN : substitute B n N)%coc
+| equiv_p : forall (gamma : list hasType) (M A B: term),
+    (gamma |- M : A ->
+    A =b B ->
+    [] |- B : cProp ->
+    gamma |- M : B)%coc
+| equiv_t : forall (gamma : list hasType) (M A B: term),
+    (gamma |- M : A ->
+    A =b B ->
+    [] |- B : cType ->
+    gamma |- M : B)%coc
+where "A |- B" := (judgement A B) : coc_scope.
 
-Axiom (weakening_type : forall (gamma : list Prop) {tA} (A : term tA) (K : term ctype) {n} (x : term (cvar n)),
-          (x : A :: gamma |- [x : A])%coc).
+(* Notation "A |- B" := (judgement A B) (at level 95) : coc_scope. *)
 
-Axiom (weakening_prop : forall (gamma : list Prop) {t} (A : term t) (K : term cprop) {n} (x : term (cvar n)),
-          (x : A :: gamma |- [x : A])%coc).
-
-(* TODO : t is an arbitrary term, loloops *)
-Axiom (lambda_type : forall (gamma : list Prop) {tA tB} (A : term tA) (B : term tB) {n1 n2} (x : term (cvar n1)) (t : term (cvar n2)) (K : term ctype),
-          n1 <> n2 ->
-          (x : A :: gamma |- [t : B ; B : K])%coc ->
-          (gamma |- [cFun x A t : cForall x A B ; cForall x A B : K])%coc).
-
-Axiom (lambda_prop : forall (gamma : list Prop) {tA tB} (A : term tA) (B : term tB) {n1 n2} (x : term (cvar n1)) (t : term (cvar n2)) (K : term cprop),
-          n1 <> n2 ->
-          (x : A :: gamma |- [t : B ; B : K])%coc ->
-          (gamma |- [cFun x A t : cForall x A B ; cForall x A B : K])%coc).
-
-Axiom (eval : forall (gamma : list Prop) {tM tN tA tB} (M : term tM) (N : term tN) (A : term tA) (B : term tB) {n} (x : term (cvar n)) (MN : term match B with
-       | cType => tB
-       | cProp => tB
-       | @cVar n' _ => if n' ==n n then tN else tB
-       | cApp _ _ => tB
-       | cFun _ _ _ => tB
-       | cForall _ _ _ => tB
-       end),
-          (gamma |- [M : cForall x A B])%coc ->
-          (gamma |- [N : A])%coc ->
-          (gamma |- [MN : substitute B x N])%coc).
