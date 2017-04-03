@@ -123,6 +123,7 @@ Definition mult_primes_up_to (n : nat) := mult_primes_up_to' n 1.
 
 
 Lemma not_prime_impl_prime_factor : forall (n : nat), 2 <= n -> ~ prime n -> exists x, divides x n /\ prime x.
+Admitted.
 
 Lemma checking_primes_sufficient : forall (n : nat), 2 <= n -> (forall k : nat, prime k -> divides k n -> k = 1 \/ k = n) <-> prime n.
   intros; split.
@@ -139,6 +140,16 @@ Lemma checking_primes_sufficient : forall (n : nat), 2 <= n -> (forall k : nat, 
           destruct H1.
           destruct (prime_dec x).
           specialize (H0 x); firstorder.
+          pose proof (not_prime_impl_prime_factor x).
+          destruct (le_gt_dec 2 x).
+          pose proof (H2 l n0).
+          destruct H3.
+          specialize (H0 x0).
+          destruct H3.
+          specialize (H0 H4 H3).
+
+          firstorder.
+          firstorder.
 
           specialize (H0 x).
           firstorder.
