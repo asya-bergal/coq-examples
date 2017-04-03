@@ -154,6 +154,9 @@ Lemma succ_mult_primes_up_to_prime : forall n, prime (S (mult_primes_up_to n)).
 Admitted.
 
 Lemma succ_mult_primes_up_to_gt : forall n, S (mult_primes_up_to n) > n.
+  intros; destruct (le_gt_dec (S (mult_primes_up_to n)) n).
+  { pose proof (succ_mult_primes_up_to_prime n); exfalso; admit. }
+  { assumption. }
 Admitted.
 
 Theorem primes_infinite : forall n, exists p, p > n /\ prime p.
