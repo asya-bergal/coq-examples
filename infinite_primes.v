@@ -114,14 +114,6 @@ Fixpoint mult_primes_up_to' (n prod : nat) :=
 
 Definition mult_primes_up_to (n : nat) := mult_primes_up_to' n 1.
 
-(* Theorem find_prime_factor (n : nat) : nat. *)
-(*   destruct (prime_dec n). *)
-(*   exact n. *)
-(*   cbv [prime] in n0. *)
-(*   := *)
-(*   if (prime_dec n) then n else  *)
-
-
 Lemma not_prime_impl_prime_factor : forall (n : nat), 2 <= n -> ~ prime n -> exists x, divides x n /\ prime x.
 Admitted.
 
@@ -141,30 +133,25 @@ Lemma checking_primes_sufficient : forall (n : nat), 2 <= n -> (forall k : nat, 
           destruct (prime_dec x).
           specialize (H0 x); firstorder.
           pose proof (not_prime_impl_prime_factor x).
-          destruct (le_gt_dec 2 x).
-          pose proof (H2 l n0).
-          destruct H3.
-          specialize (H0 x0).
-          destruct H3.
-          specialize (H0 H4 H3).
+          Admitted.
 
-          firstorder.
-          firstorder.
+Lemma succ_doesnt_divide : forall (n : nat), 2 <= n -> (forall k : nat, 2 <= k -> divides k n -> ~ divides k (S n)).
+  intros; intro. rewrite <- divides_eq in H1.
+  { rewrite <- divides_eq in H2.
+    { cbv [divides'] in H1; cbv [divides'] in H2; rewrite <- Nat.add_1_r in H2; rewrite Nat.add_mod in H2.
+      { rewrite H1 in H2; simpl in H2; rewrite Nat.mod_mod in H2.
+        { pose proof (Nat.mod_small 1 k); omega. }
+        { omega. }
+      }
+      { omega. }
+    }
+    { omega. }
+  }
+  { omega. }
+Qed.
 
-          specialize (H0 x).
-          firstorder.
-
-      intros.
-      firstorder.
-        intro; destruct H1.
-      firstorder.
-      destruct (divides_dec x n).
-      pose proof (H1 d).
-      admit.
-
-
-Lemma mult_primes_up_to_plus_one_prime : forall n, prime (mult_primes_up_to n).
+Lemma succ_mult_primes_up_to_prime : forall n, prime (S (mult_primes_up_to n)).
+Admitted.
 
 Theorem primes_infinite : forall n, exists p, p > n /\ prime p.
-Proof.
 Admitted.
