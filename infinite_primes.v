@@ -153,5 +153,11 @@ Qed.
 Lemma succ_mult_primes_up_to_prime : forall n, prime (S (mult_primes_up_to n)).
 Admitted.
 
-Theorem primes_infinite : forall n, exists p, p > n /\ prime p.
+Lemma succ_mult_primes_up_to_gt : forall n, S (mult_primes_up_to n) > n.
 Admitted.
+
+Theorem primes_infinite : forall n, exists p, p > n /\ prime p.
+  intros; exists (S (mult_primes_up_to n)); split.
+  { apply succ_mult_primes_up_to_gt. }
+  { apply succ_mult_primes_up_to_prime. }
+Qed.
